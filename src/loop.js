@@ -1,9 +1,10 @@
 import { buildSystemPrompt } from "./prompt.js";
 import { toolDefinitions, executeTool } from "./tools.js";
 
-// TODO: set the base URL and model for your OpenAI-compatible provider.
-const LLM_BASE_URL = "TODO";
-const LLM_MODEL = "TODO";
+// OpenCode Go, OpenAI-compatible chat completions endpoint.
+const LLM_BASE_URL = "https://opencode.ai/inference/go/openai/v1";
+// deepseek-v4.1-flash was unavailable upstream (429) on 2026-10-21; switch back once it works.
+const LLM_MODEL = "glm-5.3-flash";
 
 const LLM_TIMEOUT_MS = 20_000;
 const MAX_ROUNDS = 8;
@@ -17,8 +18,7 @@ const FOOD_WORDS = /\b(eat|lunch|food|makan|hungry|restaurant|hawker)\b/i;
  * history is the prior conversation as OpenAI-style {role, content} messages.
  */
 export async function runLoop(history, message, env) {
-  // If the Places key is missing, Uncle cannot search, so give a safe answer.
-  if (!env.GOOGLE_PLACES_API_KEY || FOOD_WORDS.test(message)) {
+  if (needsFallback(message, Boolean(env.GOOGLE_PLACES_API_KEY))) {
     return FALLBACK_REPLY;
   }
 
@@ -79,6 +79,15 @@ async function callModel(messages, env, sessionId) {
 
   const data = await res.json();
   return data.choices[0].message;
+}
+
+/**
+ * Uncle cannot search for places without the Places key, so a food question
+ * gets the safe canned answer. Everything else, such as rain or bus
+ * questions, still goes to the model.
+ */
+export function needsFallback(message, hasPlacesKey) {
+  return !hasPlacesKey && FOOD_WORDS.test(message);
 }
 
 function parseArgs(raw) {
